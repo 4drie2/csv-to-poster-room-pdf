@@ -68,17 +68,22 @@ class OccupantDisplay(Flowable):
 def detect_encoding(file_path):
     """Detects the CSV file encoding by analyzing a chunk."""
     with open(file_path, 'rb') as f:
-        # Read a limited chunk to avoid memory issues on large files
         result = chardet.detect(f.read(10000))
-    return result['encoding']
+    return result['encoding'] or 'utf-8'
 
 def detect_delimiter(file_path, encoding):
     """Detects the delimiter used in the CSV file."""
     with open(file_path, 'r', encoding=encoding) as f:
-        sample = f.read(1024)
-        sniffer = csv.Sniffer()
-        dialect = sniffer.sniff(sample)
-    return dialect.delimiter
+        sample = f.read(65536)
+
+    sniffer = csv.Sniffer()
+    try:
+        dialect = sniffer.sniff(sample, delimiters=',;\t|')
+        return dialect.delimiter
+    except csv.Error:
+        # Fallback: count occurrences of common delimiters in the sample
+        candidates = {d: sample.count(d) for d in (',', ';', '\t', '|')}
+        return max(candidates, key=candidates.get)
 
 def generate_pdf(csv_path, logo_path, output_path="output.pdf"):
     """Generates a PDF from the CSV data with a logo in the top right."""
